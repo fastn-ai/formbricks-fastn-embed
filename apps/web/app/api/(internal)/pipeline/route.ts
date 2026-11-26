@@ -8,7 +8,12 @@ import { sendTelemetryEvents } from "@/app/api/(internal)/pipeline/lib/telemetry
 import { ZPipelineInput } from "@/app/api/(internal)/pipeline/types/pipelines";
 import { responses } from "@/app/lib/api/response";
 import { transformErrorToDetails } from "@/app/lib/api/validator";
-import { CRON_SECRET, DANGEROUSLY_ALLOW_WEBHOOK_INTERNAL_URLS, POSTHOG_KEY } from "@/lib/constants";
+import {
+  CRON_SECRET,
+  DANGEROUSLY_ALLOW_WEBHOOK_INTERNAL_URLS,
+  POSTHOG_KEY,
+  WEBAPP_URL,
+} from "@/lib/constants";
 import { generateStandardWebhookSignature } from "@/lib/crypto";
 import { getIntegrations } from "@/lib/integration/service";
 import { getOrganizationByEnvironmentId } from "@/lib/organization/service";
@@ -20,6 +25,7 @@ import { queueAuditEvent } from "@/modules/ee/audit-logs/lib/handler";
 import { TAuditStatus, UNKNOWN_DATA } from "@/modules/ee/audit-logs/types/audit-log";
 import { recordResponseCreatedMeterEvent } from "@/modules/ee/billing/lib/metering";
 import { sendResponseFinishedEmail } from "@/modules/email";
+import { buildResponseFinishedEvent, sendFastnEvent } from "@/modules/fastn/lib/events";
 import { resolveStorageUrlsInObject } from "@/modules/storage/utils";
 import { sendFollowUpsForResponse } from "@/modules/survey/follow-ups/lib/follow-ups";
 import { FollowUpSendError } from "@/modules/survey/follow-ups/types/follow-up";
@@ -199,6 +205,18 @@ export const POST = async (request: Request) => {
     if (integrations.length > 0) {
       await handleIntegrations(integrations, inputValidation.data, survey);
     }
+
+    // fastn: send the response once. fastn routes it to whichever apps this organization set up
+    // in the embedded hub (Slack, Microsoft Teams, a CRM…), so no per-app code lives here.
+    // sendFastnEvent never throws and is a no-op when fastn is not configured.
+    await sendFastnEvent(
+      buildResponseFinishedEvent({
+        organization: { id: organization.id, name: organization.name },
+        survey,
+        response,
+        webAppUrl: WEBAPP_URL,
+      })
+    );
 
     // Fetch users with notifications in a single query
     // TODO: add cache for this query. Not possible at the moment since we can't get the membership cache by environmentId
