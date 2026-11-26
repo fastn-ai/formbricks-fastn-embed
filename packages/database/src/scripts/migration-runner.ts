@@ -2,7 +2,7 @@ import { type Prisma, PrismaClient } from "@prisma/client";
 import { exec } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { logger } from "@formbricks/logger";
 
@@ -40,8 +40,9 @@ const runMigrations = async (migrations: MigrationScript[]): Promise<void> => {
   logger.info(`Starting migrations: ${migrations.length.toString()} to run`);
   const startTime = Date.now();
 
-  // empty the prisma migrations directory
-  await execAsync(`rm -rf ${PRISMA_MIGRATIONS_DIR}/*`);
+  // empty the prisma migrations directory (fs instead of `rm -rf dir/*`, which fails on Windows)
+  await fs.rm(PRISMA_MIGRATIONS_DIR, { recursive: true, force: true });
+  await fs.mkdir(PRISMA_MIGRATIONS_DIR, { recursive: true });
 
   for (let index = 0; index < migrations.length; index++) {
     await runSingleMigration(migrations[index], index);
@@ -246,7 +247,11 @@ const loadMigrations = async (): Promise<MigrationScript[]> => {
       // It's a data migration, dynamically import and extract the scripts
       // Use .js extension when running from built code, .ts when running from source
       const modulePath = path.join(migrationPath, dataMigrationFileName);
-      const mod = (await import(modulePath)) as Record<string, MigrationScript | undefined>;
+      // pathToFileURL: on Windows a bare "D:\…" path is not a valid ESM specifier.
+      const mod = (await import(pathToFileURL(modulePath).href)) as Record<
+        string,
+        MigrationScript | undefined
+      >;
 
       // Check each export in the module for a DataMigrationScript (type: "data")
       for (const key of Object.keys(mod)) {
