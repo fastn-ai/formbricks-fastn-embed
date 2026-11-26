@@ -5,6 +5,7 @@ import { TIntegrationType } from "@formbricks/types/integration";
 import { getWebhookCountBySource } from "@/app/(app)/environments/[environmentId]/workspace/integrations/lib/webhook";
 import ActivePiecesLogo from "@/images/activepieces.webp";
 import AirtableLogo from "@/images/airtableLogo.svg";
+import FastnLogo from "@/images/fastn.svg";
 import GoogleSheetsLogo from "@/images/googleSheetsLogo.png";
 import JsLogo from "@/images/jslogo.png";
 import MakeLogo from "@/images/make-small.png";
@@ -18,6 +19,7 @@ import { getIntegrations } from "@/lib/integration/service";
 import { getBillingFallbackPath } from "@/lib/membership/navigation";
 import { getTranslate } from "@/lingodotdev/server";
 import { getEnvironmentAuth } from "@/modules/environments/lib/utils";
+import { isFastnEmbedConfigured } from "@/modules/fastn/lib/config";
 import { ProjectConfigNavigation } from "@/modules/projects/settings/components/project-config-navigation";
 import { Card } from "@/modules/ui/components/integration-card";
 import { PageContentWrapper } from "@/modules/ui/components/page-content-wrapper";
@@ -193,6 +195,23 @@ const Page = async (props: { params: Promise<{ environmentId: string }> }) => {
       disabled: isReadOnly,
     },
   ];
+
+  // fastn: one card for every app the organization connects through the embedded hub.
+  integrationCards.unshift({
+    connectHref: `/environments/${params.environmentId}/workspace/integrations/fastn`,
+    connectText: t("common.manage"),
+    connectNewTab: false,
+    docsHref: "https://docs.fastn.ai",
+    docsText: t("common.docs"),
+    docsNewTab: true,
+    label: "Integrations by fastn",
+    description:
+      "Slack, Microsoft Teams, Notion, Google Docs and more. Your team picks the apps; each response is sent once.",
+    icon: <Image src={FastnLogo} alt="fastn Logo" />,
+    connected: false,
+    statusText: isFastnEmbedConfigured() ? "Set up in the hub" : "Not configured",
+    disabled: isReadOnly || !isFastnEmbedConfigured(),
+  });
 
   integrationCards.unshift({
     docsHref: "https://formbricks.com/docs/app-surveys/quickstart",
